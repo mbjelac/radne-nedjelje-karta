@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radne Nedjelje — Karta Trgovina</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        :root {
+            --ink: #0f0e0d;
+            --card: #fffdf8;
+            --muted: #7a7570;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body, html { height: 100%; }
+
+        #map { width: 100%; height: 100%; }
+
+        /* Custom Leaflet popup */
+        .custom-popup .leaflet-popup-content-wrapper {
+            border-radius: 10px;
+            border: 2px solid var(--ink);
+            box-shadow: 4px 4px 0 var(--ink);
+            font-family: 'DM Sans', sans-serif;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .custom-popup .leaflet-popup-content {
+            margin: 0;
+            width: 220px !important;
+        }
+
+        .popup-inner { padding: 14px 16px; }
+
+        .popup-name {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+
+        .popup-addr {
+            font-size: 0.78rem;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .custom-popup .leaflet-popup-tip-container { display: none; }
+
+        /* Permanent pin labels */
+        .store-label {
+            background: var(--card);
+            border: 1.5px solid var(--ink);
+            border-radius: 6px;
+            box-shadow: 2px 2px 0 var(--ink);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.72rem;
+            line-height: 1.4;
+            padding: 4px 8px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .store-label::before { display: none; }
+        .store-label strong {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 0.75rem;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script>
+  const SITE_URL = 'https://radne-nedjelje.com/?location=novi-zagreb&brands=kaufland%2Clidl%2Cplodine%2Cspar%2Cstudenac%2Cinterspar%2Ckonzum';
+  const CORS_PROXIES = [
+    '/.netlify/functions/proxy?url=',
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url=',
+  ];
+  const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+
+  let allStores = [];
+  let markers   = {};
+
+  const params = new URLSearchParams(window.location.search);
+  const locParam = params.get('location');
+  const initialCenter = locParam && /^-?\d+\.?\d*,-?\d+\.?\d*$/.test(locParam)
+    ? locParam.split(',').map(Number)
+    : [45.815, 15.982];
+  const zoomParam = params.get('zoom');
+  const initialZoom = zoomParam && /^\d+$/.test(zoomParam) ? parseInt(zoomParam) : 13;
+
+  const map = L.map('map', { zoomControl: true }).setView(initialCenter, initialZoom);
+
+  function updateUrl() {
+    const { lat, lng } = map.getCenter();
+    const url = new URL(window.location);
+    url.searchParams.set('location', `${lat.toFixed(6)},${lng.toFixed(6)}`);
+    url.searchParams.set('zoom', map.getZoom());
+    window.history.replaceState(null, '', url);
+  }
+
+  map.on('dragend', updateUrl);
+  map.on('zoomend', updateUrl);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  function makeIcon(color = '#2b6fd9') {
+    const size = 14;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${size*0.75}" height="${size}">
+    <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}" stroke="#0f0e0d" stroke-width="2"/>
+    <circle cx="12" cy="12" r="4" fill="white"/>
+  </svg>`;
+    return L.divIcon({
+      html: svg,
+      className: '',
+      iconAnchor: [size*0.375, size],
+      popupAnchor: [0, -size]
+    });
+  }
+
+  async function fetchWithProxy(url) {
+    for (const proxy of CORS_PROXIES) {
+      try {
+        const res = await fetch(proxy + encodeURIComponent(url));
+        if (res.ok) return await res.text();
+      } catch {}
+    }
+    throw new Error('Svi CORS proxiji su nedostupni.');
+  }
+
+  function parseStores(html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const stores = [];
+    const seen = new Set();
+
+    // Strategy 1: radne-nedjelje.com uses Next.js/Tailwind — target the specific classes
+    // Names:     <span class="... truncate block">StoreName</span>
+    // Addresses: <span class="text-xs lg:text-sm font-medium truncate">Address</span>
+    const nameEls = [...doc.querySelectorAll('span')].filter(el =>
+      el.className && el.className.includes('truncate block')
+    );
+    const addrEls = [...doc.querySelectorAll('span')].filter(el =>
+      el.className === 'text-xs lg:text-sm font-medium truncate'
+    );
+
+    if (nameEls.length > 0 && nameEls.length === addrEls.length) {
+      for (let i = 0; i < nameEls.length; i++) {
+        const name = nameEls[i].textContent.trim();
+        const address = addrEls[i].textContent.trim();
+        const key = name + address;
+        if (!seen.has(key)) {
+          seen.add(key);
+          stores.push({ name, address });
+        }
+      }
+    }
+
+    if (stores.length > 0) return stores;
+
+    // Strategy 2: regex scan body text
+    const bodyText = doc.body.textContent || '';
+    const regex = /([A-ZŠĐČĆŽ][^\n]{2,50})\n([^\n]*(?:ulica|trg|avenija|cesta|put|bb)[^\n]*\d{5}[^\n]*)/gi;
+    let m;
+    while ((m = regex.exec(bodyText)) !== null) {
+      const name = m[1].trim();
+      const address = m[2].trim();
+      if (!seen.has(name + address)) {
+        seen.add(name + address);
+        stores.push({ name, address });
+      }
+    }
+
+    if (stores.length > 0) return stores;
+
+    // Strategy 3: text node walker
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const t = node.textContent.trim();
+      if (t) texts.push(t);
+    }
+    const lines = texts.join('\n').split('\n').map(s => s.trim()).filter(Boolean);
+    for (let i = 0; i < lines.length - 1; i++) {
+      const next = lines[i + 1];
+      if (/\d{5}/.test(next) || /zagreb/i.test(next)) {
+        const name = lines[i];
+        if (name.length > 2 && name.length < 80 && !seen.has(name + next)) {
+          seen.add(name + next);
+          stores.push({ name, address: next });
+        }
+      }
+    }
+
+    return stores;
+  }
+
+  const geocodeCache = {};
+  async function geocode(address) {
+    if (geocodeCache[address]) return geocodeCache[address];
+    const params = new URLSearchParams({
+      q: address,
+      format: 'json',
+      limit: 1,
+      addressdetails: 1
+    });
+    try {
+      const res = await fetch(`${NOMINATIM}?${params}`, {
+        headers: { 'Accept-Language': 'hr', 'User-Agent': 'radne-nedjelje-map/1.0' }
+      });
+      const data = await res.json();
+      if (data.length > 0) {
+        const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        geocodeCache[address] = result;
+        return result;
+      }
+    } catch {}
+    return null;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function addMarker(idx) {
+    const store = allStores[idx];
+    if (!store.coords) return;
+
+    const marker = L.marker([store.coords.lat, store.coords.lng], {
+      icon: makeIcon()
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <div class="popup-inner">
+        <div class="popup-name">${escHtml(store.name)}</div>
+        <div class="popup-addr">${escHtml(store.address)}</div>
+      </div>
+    `, { className: 'custom-popup', closeButton: false });
+
+    marker.bindTooltip(`
+      <strong>${escHtml(store.name)}</strong><br>${escHtml(store.address)}
+    `, { permanent: true, direction: 'right', className: 'store-label', offset: [8, 0] });
+
+    markers[idx] = marker;
+  }
+
+  function fitBounds() {
+    const coords = allStores.filter(s => s.coords).map(s => [s.coords.lat, s.coords.lng]);
+    if (coords.length > 0) map.fitBounds(coords, { padding: [40, 40] });
+  }
+
+  async function main() {
+    const html = await fetchWithProxy(SITE_URL);
+    allStores = parseStores(html);
+
+    for (let i = 0; i < allStores.length; i++) {
+      const coords = await geocode(allStores[i].address);
+      allStores[i].coords = coords;
+      if (coords) {
+        addMarker(i);
+        if (!locParam && (i === 0 || i % 5 === 0)) fitBounds();
+      }
+      await new Promise(r => setTimeout(r, 1100));
+    }
+
+    if (!locParam) fitBounds();
+  }
+
+  main();
+</script>
+</body>
+</html>
