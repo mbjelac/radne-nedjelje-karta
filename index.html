@@ -66,9 +66,11 @@
             line-height: 1.4;
             padding: 4px 8px;
             white-space: nowrap;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
             transition: font-size 0.2s, padding 0.2s;
         }
+        .store-label:hover { background: #fff; }
         .store-label::before { display: none; }
         .store-label strong {
             font-family: Arial, sans-serif;
@@ -287,6 +289,10 @@
       </div>
     `, { className: 'custom-popup', closeButton: false });
 
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(store.address)}&travelmode=driving`;
+    marker.on('tooltipopen', () => {
+      marker.getTooltip().getElement().addEventListener('click', () => window.open(mapsUrl, '_blank'));
+    });
     marker.bindTooltip(`
       <strong>${escHtml(store.name)}</strong><span>${escHtml(store.address)}</span>
     `, { permanent: true, direction: 'right', className: 'store-label', offset: [8, 0] });
