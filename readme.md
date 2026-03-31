@@ -1,4 +1,4 @@
-# Radne-Nedjelje.com karta
+# Map mode for Radne-Nedjelje.com
 
 This is a micro-site which turns the list from https://radne-nedjelje.com into an interactive map.
  
