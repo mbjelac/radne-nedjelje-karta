@@ -20,3 +20,9 @@ Click on info boxes to open Google Maps with driving directions.
 ## Use on phone
 
 Install the website on your phone (in browser choose "Add to home screen" or equivalent). App name & icons built in.
+
+## Credits
+
+App icon: [Freepik](https://www.freepik.com/free-vector/slim-paper-bag-with-supermarket-products_9463114.htm)
+
+Coding: [Claude](https://claude.ai/)
