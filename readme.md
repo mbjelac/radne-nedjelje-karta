@@ -4,3 +4,19 @@ This is a micro-site which turns the list from https://radne-nedjelje.com into a
  
 I want to know which stores are closest to my current location.
 I also want to quickly open Google maps with driving directions.
+
+## Usage
+
+Drag to pan.
+
+Scroll/pinch to zoom.
+
+Location & zoom level are saved in the URL. Copy URL to get a custom starting location & zoom level.
+
+Pins & info boxes which appear represent stores open this Sunday.
+
+Click on info boxes to open Google Maps with driving directions.
+
+## Use on phone
+
+Install the website on your phone (in browser choose "Add to home screen" or equivalent). App name & icons built in.
