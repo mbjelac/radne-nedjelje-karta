@@ -67,14 +67,41 @@
             padding: 4px 8px;
             white-space: nowrap;
             pointer-events: none;
+            transition: font-size 0.2s, padding 0.2s;
         }
         .store-label::before { display: none; }
         .store-label strong {
-            font-family: 'Syne', sans-serif;
+            font-family: Arial, sans-serif;
             font-weight: 700;
             font-size: 0.75rem;
             display: block;
+            margin-bottom: 2px;
+            line-height: 1;
         }
+        .store-label span {
+            line-height: 1;
+        }
+
+        #map[data-zoom="z-low"] .store-label    { font-size: 0.32rem; padding: 1px 2px; border-width: 1px; box-shadow: 1px 1px 0 var(--ink); }
+        #map[data-zoom="z-low"] .store-label strong { font-size: 0.34rem; }
+
+        #map[data-zoom="z13"] .store-label     { font-size: 0.37rem; padding: 1px 2px; border-width: 1px; box-shadow: 1px 1px 0 var(--ink); }
+        #map[data-zoom="z13"] .store-label strong  { font-size: 0.38rem; }
+
+        #map[data-zoom="z14"] .store-label     { font-size: 0.43rem; padding: 1px 4px; }
+        #map[data-zoom="z14"] .store-label strong  { font-size: 0.44rem; }
+
+        #map[data-zoom="z15"] .store-label     { font-size: 0.48rem; padding: 2px 5px; }
+        #map[data-zoom="z15"] .store-label strong  { font-size: 0.49rem; }
+
+        #map[data-zoom="z16"] .store-label     { font-size: 0.52rem; padding: 2px 6px; }
+        #map[data-zoom="z16"] .store-label strong  { font-size: 0.54rem; }
+
+        #map[data-zoom="z17"] .store-label     { font-size: 0.58rem; padding: 4px 6px; }
+        #map[data-zoom="z17"] .store-label strong  { font-size: 0.60rem; }
+
+        #map[data-zoom="z-high"] .store-label  { font-size: 0.65rem; padding: 5px 8px; }
+        #map[data-zoom="z-high"] .store-label strong { font-size: 0.67rem; }
     </style>
 </head>
 <body>
@@ -111,8 +138,15 @@
     window.history.replaceState(null, '', url);
   }
 
+  function updateLabelSize() {
+    const z = map.getZoom();
+    const tier = z < 13 ? 'z-low' : z > 17 ? 'z-high' : `z${z}`;
+    document.getElementById('map').dataset.zoom = tier;
+  }
+
   map.on('dragend', updateUrl);
-  map.on('zoomend', updateUrl);
+  map.on('zoomend', () => { updateUrl(); updateLabelSize(); });
+  updateLabelSize();
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap contributors © CARTO',
@@ -254,7 +288,7 @@
     `, { className: 'custom-popup', closeButton: false });
 
     marker.bindTooltip(`
-      <strong>${escHtml(store.name)}</strong><br>${escHtml(store.address)}
+      <strong>${escHtml(store.name)}</strong><span>${escHtml(store.address)}</span>
     `, { permanent: true, direction: 'right', className: 'store-label', offset: [8, 0] });
 
     markers[idx] = marker;
