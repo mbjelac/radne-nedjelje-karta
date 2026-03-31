@@ -19,7 +19,8 @@ Click on info boxes to open Google Maps with driving directions.
 
 ## Use on phone
 
-Install the website on your phone (in browser choose "Add to home screen" or equivalent). App name & icons built in.
+Deploy website to cloud (e.g. Netlify), open on your phone and install (in phone browser choose "Add to home screen" or equivalent).
+App name & icons built in.
 
 ## Credits
 
